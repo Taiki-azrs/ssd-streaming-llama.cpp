@@ -1714,13 +1714,17 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
         ggml_backend_dev_get_props(dev, &props);
         bool buffer_from_host_ptr_supported = props.caps.buffer_from_host_ptr;
         bool is_default_buft = buft == ggml_backend_dev_buffer_type(dev);
+        bool is_gpu_buft = props.type == GGML_BACKEND_DEVICE_TYPE_GPU;
 
         std::vector<ggml_backend_buffer_ptr> bufs;
 
         // a lazy context is mapped whatever the load mode, but the memory-fit pass maps nothing
         const bool is_lazy_mapped = ctx_key.lazy && !ml.no_alloc;
 
-        if ((ml.use_mmap || is_lazy_mapped) && use_mmap_buffer && buffer_from_host_ptr_supported && is_default_buft) {
+        // GPU mmap ranges can include lazy tensors between resident tensors in the file.
+        // Do not map such ranges as one Metal buffer.
+        const bool use_mmap_buffer_for_ctx = use_mmap_buffer && (!is_gpu_buft || !ml.lazy.any());
+        if ((ml.use_mmap || is_lazy_mapped) && use_mmap_buffer_for_ctx && buffer_from_host_ptr_supported && is_default_buft) {
             GGML_ASSERT(!ml.no_alloc);
             for (uint32_t idx = 0; idx < ml.files.size(); idx++) {
                 // only the mmap region containing the tensors in the model is mapped to the backend buffer
