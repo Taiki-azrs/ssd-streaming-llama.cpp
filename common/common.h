@@ -485,6 +485,8 @@ struct common_params {
 
     enum llama_lazy_mode lazy_mode = LLAMA_LAZY_MODE_AUTO; // on-demand reading of tensors marked by the arch
 
+    int32_t n_ssd_moe = 0; // number of leading MoE layers whose expert weights are read on demand from storage
+
     common_cpu_params cpuparams;
     common_cpu_params cpuparams_batch;
 

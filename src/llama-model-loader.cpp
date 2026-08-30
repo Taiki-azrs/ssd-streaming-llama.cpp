@@ -540,6 +540,7 @@ llama_model_loader::llama_model_loader(
         bool check_tensors,
         bool no_alloc,
         bool load_mtp,
+        int32_t n_ssd_moe,
         const llama_model_kv_override * param_overrides_p,
         const llama_model_tensor_buft_override * param_tensor_buft_overrides_p)
         : metadata(meta), set_tensor_data(set_tensor_data), set_tensor_data_ud(set_tensor_data_ud) {
@@ -558,6 +559,7 @@ llama_model_loader::llama_model_loader(
 
     this->use_mmap      = load_mode == LLAMA_LOAD_MODE_MMAP || load_mode == LLAMA_LOAD_MODE_MMAP_MLOCK || load_mode == LLAMA_LOAD_MODE_AUTO;
     this->use_direct_io = load_mode == LLAMA_LOAD_MODE_DIRECT_IO;
+    this->n_ssd_moe     = n_ssd_moe;
 
     if (!fname.empty()) {
         // Load the main GGUF
@@ -1332,9 +1334,24 @@ struct ggml_tensor * llama_model_loader::create_tensor(
         return NULL;
     }
 
-    if (flags & TENSOR_READ_LAZY) {
+    const bool is_expert_tensor =
+        tn.tensor == LLM_TENSOR_FFN_DOWN_EXPS ||
+        tn.tensor == LLM_TENSOR_FFN_GATE_EXPS ||
+        tn.tensor == LLM_TENSOR_FFN_UP_EXPS ||
+        tn.tensor == LLM_TENSOR_FFN_GATE_UP_EXPS ||
+        tn.tensor == LLM_TENSOR_FFN_DOWN_CHEXPS ||
+        tn.tensor == LLM_TENSOR_FFN_GATE_CHEXPS ||
+        tn.tensor == LLM_TENSOR_FFN_UP_CHEXPS;
+    const bool is_ssd_expert = is_expert_tensor && tn.bid >= 0 && tn.bid < n_ssd_moe;
+
+    if ((flags & TENSOR_READ_LAZY) || is_ssd_expert) {
         // the decision must not depend on the load mode, or the memory-fit pass (no_alloc, no mmap)
+        const llama_lazy_mode mode = lazy.mode;
+        if (is_ssd_expert) {
+            lazy.mode = LLAMA_LAZY_MODE_ON;
+        }
         is_lazy = lazy.add(tn.str(), cur, no_alloc ? nullptr : &require_weight(tn.str().c_str()));
+        lazy.mode = mode;
     }
 
     ggml_tensor t_meta = *cur;

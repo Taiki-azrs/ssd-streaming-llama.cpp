@@ -323,6 +323,8 @@ extern "C" {
 
         enum llama_lazy_mode lazy_mode; // on-demand reading of tensors marked by the arch
 
+        int32_t n_ssd_moe; // number of leading MoE layers whose expert weights are read on demand from storage
+
         // the GPU that is used for the entire model when split_mode is LLAMA_SPLIT_MODE_NONE
         int32_t main_gpu;
 
